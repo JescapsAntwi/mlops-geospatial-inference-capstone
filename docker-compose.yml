@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  # Main MLOps Pipeline API
+  mlops-api:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./results:/app/results
+      - ./temp:/app/temp
+    environment:
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Optional: Redis for future queue management
+  # Uncomment if you want to use Redis for job queuing
+  # redis:
+  #   image: redis:7-alpine
+  #   ports:
+  #     - "6379:6379"
+  #   restart: unless-stopped
+  #   volumes:
+  #     - redis_data:/data
+
+  # Optional: PostgreSQL for production database
+  # Uncomment if you want to use PostgreSQL instead of SQLite
+  # postgres:
+  #   image: postgres:15-alpine
+  #   environment:
+  #     POSTGRES_DB: mlops_pipeline
+  #     POSTGRES_USER: mlops_user
+  #     POSTGRES_PASSWORD: mlops_password
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   restart: unless-stopped
+
+volumes:
+  # redis_data:
+  # postgres_data:
