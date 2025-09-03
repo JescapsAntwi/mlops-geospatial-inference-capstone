@@ -12,6 +12,7 @@ from typing import Dict, List, Any
 import rasterio
 from PIL import Image
 import numpy as np
+import onnxruntime as ort
 
 class InferenceWorker:
     """
@@ -26,11 +27,40 @@ class InferenceWorker:
     """
     
     def __init__(self):
+        # Load the ONNX model
+        self.model_path = "models/model.onnx"
+        self.session = ort.InferenceSession(self.model_path)
+        self.input_name = self.session.get_inputs()[0].name
+        self.output_name = self.session.get_outputs()[0].name
         # Simulated class labels for the Palm model
         self.class_labels = [
             "palm_tree", "building", "road", "water", "vegetation", 
             "vehicle", "person", "agriculture", "forest", "urban"
         ]
+    
+    def _run_onnx_inference(self, input_data: np.ndarray) -> List[Dict[str, Any]]:
+        # Run inference using ONNX model
+        outputs = self.session.run([self.output_name], {self.input_name: input_data})
+        detections = []
+
+        for i, output in enumerate(outputs[0]):
+            # Assuming output contains bounding boxes, class IDs, and confidence scores
+            bbox = output[:4]  # x_min, y_min, x_max, y_max
+            class_id = int(output[4])
+            confidence = float(output[5])
+
+            detection = {
+                "id": i,
+                "class_id": class_id,
+                "class_name": self.class_labels[class_id],
+                "bbox": bbox.tolist(),
+                "bbox_format": "xyxy",
+                "confidence": confidence,
+                "area": (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])
+            }
+            detections.append(detection)
+
+        return detections
     
     async def process_file(self, file_path: str) -> Dict[str, Any]:
         """
@@ -45,20 +75,18 @@ class InferenceWorker:
         try:
             print(f"🔍 Processing {file_path}...")
             
-            # Simulate processing time (in real implementation, this would be actual model inference)
-            await asyncio.sleep(random.uniform(0.5, 2.0))
-            
-            # Read GeoTIFF metadata
+            # Read GeoTIFF data
             with rasterio.open(file_path) as src:
+                image_data = src.read(1)  # Read the first band
+                image_data = np.expand_dims(image_data, axis=0)  # Add batch dimension
                 # Get image dimensions
                 height, width = src.shape
                 # Get coordinate system info
                 crs = src.crs
                 transform = src.transform
             
-            # Simulate Palm model inference results
-            # In reality, this would be the actual output from the model
-            detections = self._simulate_palm_detections(width, height)
+            # Run inference
+            detections = self._run_onnx_inference(image_data)
             
             # Create result structure
             result = {
@@ -72,7 +100,7 @@ class InferenceWorker:
                 },
                 "detections": detections,
                 "processing_time": datetime.now().isoformat(),
-                "model_version": "palm_v1.0_simulated"
+                "model_version": "palm_v1.0"
             }
             
             print(f"✅ Completed inference on {file_path}")

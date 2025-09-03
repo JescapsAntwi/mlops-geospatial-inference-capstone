@@ -1,0 +1,167 @@
+1. starting the api server directly with Python instead of Docker to test the GCP integration
+
+python -m uvicorn app:app --host 0.0.0.0 --port 8000
+
+2. wait 5 seconds for the server to start and then test the GCP upload 
+
+Start-Sleep -Seconds 5
+
+3. test gcp upload 
+
+python test_gcp_uploads.py
+
+4. since the inference worker wasn't processing files correctly (likely due to a bug), we will test gcp upload directly
+
+python test_gcp_direct.py
+
+5. verify that the files are in the bucket on gcp
+
+gsutil ls gs://aya-internship-mlops-bucket/test_uploads/
+
+PROBLEM: Background tasks in the FastAPI aren't executing the GCP uploads
+because the inference worker isn't running to process the jobs.
+
+
+WHAT'S WORKING
+- GCP SetUp complete (project, bucket, service account, and credentials are all configured)
+- GCP uploads work (direct uploads to gcp is successful)
+- api server is running (the fastapi server is accepting uploads and creating jobs)
+-Files are saved locally in the uploads directory (local storage)
+- Jobs are being created and stored in the database
+
+WHAT'S NOT WORKING
+- Background GCP Uploads: The FastAPI background tasks
+for GCP uploads aren't executing
+- Job Processing: Jobs remain in "queued" status because the inference
+worker isn't running
+- Docker Issues: Docker containers can't start due to Windows path
+issues with spaces
+
+
+NEXT STEPS
+Option 1: Fix Docker Path Issues (Recommended)
+The Docker issue is with Windows paths containing spaces. We need to either:
+Move the project to a path without spaces
+Fix the Docker volume mounting
+
+
+Option 2: Run Without Docker (Current Working Setup)
+Since the API server is running with Python directly, we can:
+Start the inference worker manually to process jobs
+Fix the background task execution for GCP uploads
+Test the complete pipeline
+
+TESTING COMPLETE pipeline
+- Starting inference worker (python inference_worker_simple.py)
+
+- Wait for a moment for the worker to start processing and then check the job status
+Start-Sleep -Seconds 10
+
+- check if the job has been processed
+curl http://localhost:8000/status/21fd4b8e-36ec-4776-abe9-de08571d0070
+
+
+UPLOAD NEW FILES (OPTION 1)  ✅✅✅✅
+# 1. Test GCP connection
+python test_gcp_direct.py
+
+# 2. Upload specific GeoTIFF files directly
+python -c "
+from google.cloud import storage
+from pathlib import Path
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+client = storage.Client()
+bucket = client.bucket('aya-internship-mlops-bucket')
+
+# Upload your new images
+for file_path in Path('.').glob('Juaben_tile_100.tif'):
+    blob_name = f'test_uploads/{file_path.name}'
+    blob = bucket.blob(blob_name)
+    blob.upload_from_filename(str(file_path))
+    print(f'✅ Uploaded {file_path.name} to gs://aya-internship-mlops-bucket/{blob_name}')
+"
+
+
+OPTION 2 (FIX THE API AND USE THE PIPELINE)
+# 1. Update .env file with correct bucket name
+echo "GCP_BUCKET_NAME=aya-internship-mlops-bucket" > .env
+echo "GOOGLE_APPLICATION_CREDENTIALS=./key.json" >> .env
+echo "ENABLE_GCP_UPLOAD=true" >> .env
+echo "API_BASE=http://localhost:8000" >> .env
+
+# 2. Restart the API server
+# (Stop current server with Ctrl+C, then restart)
+python -m uvicorn app:app --host 0.0.0.0 --port 8000
+
+# 3. Upload via API
+python test_gcp_uploads.py
+
+
+OPTION 3: SIMPLE UPLOAD SCRIPT
+# Create upload script
+cat > upload_to_gcp.py << 'EOF'
+#!/usr/bin/env python3
+import sys
+from google.cloud import storage
+from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv()
+
+def upload_files(pattern="*.tif"):
+    client = storage.Client()
+    bucket = client.bucket('aya-internship-mlops-bucket')
+    
+    files = list(Path('.').glob(pattern))
+    if not files:
+        print(f"No files found matching pattern: {pattern}")
+        return
+    
+    for file_path in files:
+        try:
+            blob_name = f'uploads/{file_path.name}'
+            blob = bucket.blob(blob_name)
+            blob.upload_from_filename(str(file_path))
+            print(f'✅ {file_path.name} -> gs://aya-internship-mlops-bucket/{blob_name}')
+        except Exception as e:
+            print(f'❌ Failed to upload {file_path.name}: {e}')
+
+if __name__ == "__main__":
+    pattern = sys.argv[1] if len(sys.argv) > 1 else "*.tif"
+    upload_files(pattern)
+EOF
+
+# Use it to upload files
+python upload_to_gcp.py "your_new_image*.tif"
+
+
+OPTION 4: ONE LINER FOR SINGLE FILE
+# Upload a single file
+python -c "
+from google.cloud import storage
+from dotenv import load_dotenv
+load_dotenv()
+storage.Client().bucket('aya-internship-mlops-bucket').blob('uploads/Juaben_tile_101.tif').upload_from_filename('Juaben_tile_101.tif')
+print('✅ Uploaded!')
+"
+
+
+OPTION 5: UPLOAD MULTIPLE FILES
+# 2. Upload new images directly
+python -c "
+from google.cloud import storage
+from dotenv import load_dotenv
+load_dotenv()
+client = storage.Client()
+bucket = client.bucket('aya-internship-mlops-bucket')
+
+# Upload your new files here
+for file_path in ['image1.tif', 'image2.tif']:
+    if Path(file_path).exists():
+        blob = bucket.blob(f'uploads/{file_path}')
+        blob.upload_from_filename(file_path)
+        print(f'✅ Uploaded {file_path}')
+"

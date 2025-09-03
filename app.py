@@ -10,18 +10,22 @@ import uuid
 from datetime import datetime
 from typing import List, Optional
 from pathlib import Path
+import logging
 
 import uvicorn
 from fastapi import FastAPI, File, UploadFile, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import httpx
+from google.cloud import storage
 
 # Import our custom modules
 from database import Database, JobStatus
 from inference_worker_simple import InferenceWorker
 from post_processor import PostProcessor
 from webhook_sender import WebhookSender
+
+import traceback
 
 # Create FastAPI app
 app = FastAPI(
@@ -35,6 +39,16 @@ db = Database()
 inference_worker = InferenceWorker()
 post_processor = PostProcessor()
 webhook_sender = WebhookSender()
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# GCP upload configuration (toggle with env var)
+ENABLE_GCP_UPLOAD = os.getenv("ENABLE_GCP_UPLOAD", "true").lower() in ("1", "true", "yes")
+GCP_BUCKET_NAME = os.getenv("GCP_BUCKET_NAME", "aya-internship-mlops-bucket")
+_storage_client: storage.Client | None = None
+_gcs_bucket = None
 
 # Data models for API requests/responses
 class JobResponse(BaseModel):
@@ -63,9 +77,33 @@ os.makedirs("temp", exist_ok=True)
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize database and create tables on startup"""
+    """Initialize database, create tables and GCS client on startup"""
+    global _storage_client, _gcs_bucket, GCP_BUCKET_NAME
     await db.init_db()
-    print("🚀 MLOps Pipeline API started successfully!")
+
+    # Initialize GCS client & bucket (non-fatal)
+    if ENABLE_GCP_UPLOAD:
+        try:
+            project = os.getenv("GCP_PROJECT", "aya-internship")
+            # prefer env or previously set value; default bucket name is 'uploads'
+            GCP_BUCKET_NAME = GCP_BUCKET_NAME or os.getenv("GCP_BUCKET_NAME", "uploads")
+            _storage_client = storage.Client(project=project)
+            bucket = _storage_client.bucket(GCP_BUCKET_NAME)
+            if not bucket.exists():
+                # create bucket (location from env or default)
+                location = os.getenv("GCP_BUCKET_REGION", "us-central1")
+                bucket = _storage_client.create_bucket(GCP_BUCKET_NAME, location=location)
+                logger.info(f"Created GCS bucket: gs://{GCP_BUCKET_NAME}")
+            _gcs_bucket = bucket
+            logger.info(f"GCS ready: gs://{GCP_BUCKET_NAME}")
+        except Exception as e:
+            logger.error(f"Failed to initialize GCS client: {e}")
+            _storage_client = None
+            _gcs_bucket = None
+
+
+
+
 
 @app.post("/upload", response_model=JobResponse)
 async def upload_files(
@@ -74,59 +112,76 @@ async def upload_files(
     webhook_url: Optional[str] = None
 ):
     """
-    Upload GeoTIFF files for processing
-    
-    This endpoint accepts multiple GeoTIFF files and starts the inference pipeline.
-    Files are saved locally and a job is created for processing.
+    Upload GeoTIFF files for processing.
+
+    Saves files locally and (if enabled) uploads each file to GCS in the background.
     """
+
+    # Validate files
     try:
-        # Validate files
         if not files:
             raise HTTPException(status_code=400, detail="No files provided")
-        
-        # Check if files are GeoTIFF
-        for file in files:
-            if not file.filename.lower().endswith(('.tif', '.tiff')):
-                raise HTTPException(
-                    status_code=400, 
-                    detail=f"File {file.filename} is not a GeoTIFF file"
-                )
-        
-        # Generate unique job ID
+
+        for f in files:
+            if not f.filename.lower().endswith((".tif", ".tiff")):
+                raise HTTPException(status_code=400, detail=f"File {f.filename} is not a GeoTIFF file")
+
+        # Create job
         job_id = str(uuid.uuid4())
-        
-        # Create job record in database
-        await db.create_job(
-            job_id=job_id,
-            total_files=len(files),
-            webhook_url=webhook_url
-        )
-        
-        # Save uploaded files
-        file_paths = []
+        await db.create_job(job_id=job_id, total_files=len(files), webhook_url=webhook_url)
+
+        saved_paths = []
+        upload_errors = []
+
+    # Helper blocking uploader used inside asyncio.to_thread
+        def _gcs_upload_blocking(local_path: str, blob_name: str, content_type: str):
+            try:
+                if _gcs_bucket is None:
+                    raise RuntimeError("GCS bucket not configured")
+                blob = _gcs_bucket.blob(blob_name)
+                blob.upload_from_filename(local_path, content_type=content_type)
+                logger.info(f"Uploaded to GCS: gs://{_gcs_bucket.name}/{blob_name}")
+            except Exception as e:
+                logger.error(f"GCS upload failed for {local_path}: {e}")
+                raise
+
+        # Save files locally and schedule GCS uploads
         for file in files:
-            file_path = f"uploads/{job_id}_{file.filename}"
-            with open(file_path, "wb") as buffer:
-                content = await file.read()
-                buffer.write(content)
-            file_paths.append(file_path)
-        
-        # Start processing in background
-        background_tasks.add_task(
-            process_job,
-            job_id=job_id,
-            file_paths=file_paths
-        )
-        
-        return JobResponse(
-            job_id=job_id,
-            status="queued",
-            message=f"Job created successfully. {len(files)} files uploaded.",
-            created_at=datetime.now().isoformat()
-        )
-        
+            local_name = f"uploads/{job_id}_{file.filename}"
+            os.makedirs(os.path.dirname(local_name), exist_ok=True)
+            contents = await file.read()
+            with open(local_name, "wb") as out_f:
+                out_f.write(contents)
+            saved_paths.append(local_name)
+
+            # Schedule background upload to GCS (if enabled and bucket configured)
+            if ENABLE_GCP_UPLOAD and _gcs_bucket is not None:
+                blob_name = local_name
+                content_type = file.content_type or "application/octet-stream"
+                # schedule blocking upload in a thread after response
+                background_tasks.add_task(asyncio.to_thread, _gcs_upload_blocking, local_name, blob_name, content_type)
+
+        # Start processing job in background
+        background_tasks.add_task(process_job, job_id=job_id, file_paths=saved_paths)
+
+    except HTTPException as he:
+        raise he  # Let FastAPI handle known errors
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        tb = traceback.format_exc()
+        logger.error(f"Unhandled exception during upload: {e}\n{tb}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "Unexpected server error",
+                "message": str(e),
+                "trace": tb 
+            }
+        )
+
+    return JobResponse(job_id=job_id, status="queued", message=f"Job created successfully. {len(saved_paths)} files uploaded.", created_at=datetime.now().isoformat())
+
+
+
 
 @app.get("/status/{job_id}", response_model=StatusResponse)
 async def get_job_status(job_id: str):

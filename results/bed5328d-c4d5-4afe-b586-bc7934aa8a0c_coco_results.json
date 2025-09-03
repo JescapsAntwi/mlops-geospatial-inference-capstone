@@ -1,0 +1,195 @@
+{
+  "info": {
+    "year": 2025,
+    "version": "1.0",
+    "description": "Palm Model Geospatial Inference Results",
+    "contributor": "MLOps Pipeline",
+    "url": "",
+    "date_created": "2025-08-26T15:33:08.488500"
+  },
+  "licenses": [
+    {
+      "id": 1,
+      "name": "Attribution-NonCommercial-ShareAlike License",
+      "url": "http://creativecommons.org/licenses/by-nc-sa/2.0/"
+    }
+  ],
+  "categories": [
+    {
+      "id": 0,
+      "name": "palm_tree",
+      "supercategory": "vegetation"
+    },
+    {
+      "id": 1,
+      "name": "building",
+      "supercategory": "structure"
+    },
+    {
+      "id": 2,
+      "name": "road",
+      "supercategory": "infrastructure"
+    },
+    {
+      "id": 3,
+      "name": "water",
+      "supercategory": "natural"
+    },
+    {
+      "id": 4,
+      "name": "vegetation",
+      "supercategory": "natural"
+    },
+    {
+      "id": 5,
+      "name": "vehicle",
+      "supercategory": "transport"
+    },
+    {
+      "id": 6,
+      "name": "person",
+      "supercategory": "living"
+    },
+    {
+      "id": 7,
+      "name": "agriculture",
+      "supercategory": "land_use"
+    },
+    {
+      "id": 8,
+      "name": "forest",
+      "supercategory": "vegetation"
+    },
+    {
+      "id": 9,
+      "name": "urban",
+      "supercategory": "land_use"
+    }
+  ],
+  "images": [
+    {
+      "id": 0,
+      "width": 512,
+      "height": 512,
+      "file_name": "bed5328d-c4d5-4afe-b586-bc7934aa8a0c_sample1.tif",
+      "license": 1,
+      "flickr_url": "",
+      "coco_url": "",
+      "date_captured": "2025-08-26T15:33:07.396698",
+      "geospatial_info": {
+        "crs": "EPSG:4326",
+        "transform": [
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "id": 1,
+      "width": 512,
+      "height": 512,
+      "file_name": "bed5328d-c4d5-4afe-b586-bc7934aa8a0c_sample2.tif",
+      "license": 1,
+      "flickr_url": "",
+      "coco_url": "",
+      "date_captured": "2025-08-26T15:33:08.474538",
+      "geospatial_info": {
+        "crs": "EPSG:4326",
+        "transform": [
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ]
+      }
+    }
+  ],
+  "annotations": [
+    {
+      "id": 1,
+      "image_id": 0,
+      "category_id": 3,
+      "segmentation": [],
+      "area": 11445,
+      "bbox": [
+        398,
+        223,
+        109,
+        105
+      ],
+      "iscrowd": 0,
+      "confidence": 0.569,
+      "bbox_format_original": "xyxy"
+    },
+    {
+      "id": 2,
+      "image_id": 0,
+      "category_id": 9,
+      "segmentation": [],
+      "area": 5800,
+      "bbox": [
+        127,
+        3,
+        50,
+        116
+      ],
+      "iscrowd": 0,
+      "confidence": 0.716,
+      "bbox_format_original": "xyxy"
+    },
+    {
+      "id": 3,
+      "image_id": 0,
+      "category_id": 7,
+      "segmentation": [],
+      "area": 2860,
+      "bbox": [
+        174,
+        369,
+        52,
+        55
+      ],
+      "iscrowd": 0,
+      "confidence": 0.729,
+      "bbox_format_original": "xyxy"
+    },
+    {
+      "id": 4,
+      "image_id": 1,
+      "category_id": 6,
+      "segmentation": [],
+      "area": 5304,
+      "bbox": [
+        40,
+        113,
+        104,
+        51
+      ],
+      "iscrowd": 0,
+      "confidence": 0.885,
+      "bbox_format_original": "xyxy"
+    },
+    {
+      "id": 5,
+      "image_id": 1,
+      "category_id": 5,
+      "segmentation": [],
+      "area": 4182,
+      "bbox": [
+        328,
+        214,
+        34,
+        123
+      ],
+      "iscrowd": 0,
+      "confidence": 0.689,
+      "bbox_format_original": "xyxy"
+    }
+  ]
+}
