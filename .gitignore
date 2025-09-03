@@ -1,9 +1,9 @@
 # Ignore trained model artifacts
 models/
-# Ignore any nested files under models
 models/**
-# Explicitly ignore ONNX model file
-models/model.onnx
+*.onnx
+*.pth
+*.h5
 
 # Local env files
 .env
@@ -21,11 +21,6 @@ google-credentials.json
 
 # GCP / cloud artifacts
 *.gcloud
-
-# Model artifacts and checkpoints
-models/
-models/**
-models/model.onnx
 
 # Large data / outputs / caches
 uploads/
@@ -84,5 +79,5 @@ Thumbs.db
 # Docker
 docker-compose.override.yml
 
-# Ignore this file intentionally if you keep local overrides
+# Local gitignore overrides
 .gitignore_local
