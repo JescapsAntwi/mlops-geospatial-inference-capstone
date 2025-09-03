@@ -1,0 +1,88 @@
+# Ignore trained model artifacts
+models/
+# Ignore any nested files under models
+models/**
+# Explicitly ignore ONNX model file
+models/model.onnx
+
+# Local env files
+.env
+.env.local
+.env.*.local
+
+# Service account / credential files
+key.json
+credentials.json
+service_account.json
+google-credentials.json
+*.pem
+*.p12
+*.key
+
+# GCP / cloud artifacts
+*.gcloud
+
+# Model artifacts and checkpoints
+models/
+models/**
+models/model.onnx
+
+# Large data / outputs / caches
+uploads/
+uploads/**
+temp/
+temp/**
+results/
+results/**
+
+# Databases
+*.db
+*.sqlite
+mlops_pipeline.db
+
+# Python caches and compiled files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyc
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Python packaging
+build/
+dist/
+*.egg-info/
+*.whl
+
+# Test / coverage
+.coverage
+.pytest_cache/
+
+# Type checker caches
+.mypy_cache/
+
+# IDE / editor
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Secrets
+.secrets/
+
+# Docker
+docker-compose.override.yml
+
+# Ignore this file intentionally if you keep local overrides
+.gitignore_local
